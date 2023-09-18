@@ -17,11 +17,12 @@ class Pile(object):
         self.horizontals = []
         self.texts = []
         self.images = []
-
         self._SEARCH_DISTANCE = 1.0
+
 
     def __nonzero__(self):
         return bool(self.texts)
+
 
     def get_type(self):
         if self.verticals:
@@ -30,6 +31,7 @@ class Pile(object):
             return 'image'
         else:
             return 'paragraph'
+
 
     def parse_layout(self, layout):
         obj_stack = list(reversed(list(layout)))
@@ -47,13 +49,14 @@ class Pile(object):
                     self._adjust_to_close(obj, self.horizontals, 'y0')
                     self.horizontals.append(obj)
             elif type(obj) == LTImage:
-                self.images.append(obj)
+                # self.images.append(obj)
+                pass
             elif type(obj) == LTCurve:
                 pass
             elif type(obj) == LTChar:
                 pass
             elif type(obj) == LTLine:
-                pass                    
+                pass
             else:
                 assert False, "Unrecognized type: %s" % type(obj)
 
@@ -62,10 +65,14 @@ class Pile(object):
         tables = self._find_tables()
         paragraphs = self._find_paragraphs(tables)
         images = self._find_images()
-
-        piles = sorted(tables + paragraphs + images, reverse=True, key=lambda x: x._get_anything().y0)
-
+        piles = tables + paragraphs + images
+        piles = list(filter(lambda x: x._empty(), piles))
+        piles = sorted(piles, reverse=True, key=lambda x: x._get_anything().y0)
         return piles
+
+
+    def _empty(self):
+        return bool(self.images) or bool(self.texts)
 
 
     def gen_markdown(self, syntax):
@@ -82,15 +89,11 @@ class Pile(object):
 
     def gen_html(self):
         html = ''
-
         page_height = 800 # for flipping the coordinate
-
         html += '<meta charset="utf8" />'
         html += '<svg width="100%" height="100%">'
-
         # flip coordinate
         html += '<g transform="translate(0, {}) scale(1, -1)">'.format(page_height)
-
         rect = '<rect width="{width}" height="{height}" x="{x}" y="{y}" fill="{fill}"><title>{text}</title></rect>'
 
         for text in self.texts:
@@ -99,7 +102,7 @@ class Pile(object):
                 'height': text.y1 - text.y0,
                 'x': text.x0,
                 'y': text.y0,
-                'text': text.get_text().encode('utf8'),
+                'text': text.get_text(),
                 'fill': 'green',
             }
             html += rect.format(**info)
@@ -128,7 +131,6 @@ class Pile(object):
 
         html += '</g>'
         html += '</svg>'
-
         return html
 
 
@@ -158,6 +160,7 @@ class Pile(object):
             raise Exception('No such attr')
         obj.set_bbox(new_bbox)
 
+
     def _find_tables(self):
         tables = []
         visited = set()
@@ -169,12 +172,10 @@ class Pile(object):
             top, bottom = self._calc_top_bottom(near_verticals)
             included_horizontals = self._find_included(top, bottom, self.horizontals)
             included_texts = self._find_included(top, bottom, self.texts)
-
             table = Pile()
             table.verticals = near_verticals
             table.horizontals = included_horizontals
             table.texts = included_texts
-
             tables.append(table)
             visited.update(near_verticals)
         return tables
@@ -202,8 +203,7 @@ class Pile(object):
                     paragraphs[idx].texts.append(text)
                     break
 
-        paragraphs = filter(None, paragraphs)
-
+        paragraphs = list(filter(lambda x: x._empty(), paragraphs))
         return paragraphs
 
 
@@ -225,6 +225,7 @@ class Pile(object):
 
 
     def _is_overlap(self, top, bottom, obj):
+        # assert top >= bottom
         assert top > bottom
         return (bottom - self._SEARCH_DISTANCE) <= obj.y0 <= (top + self._SEARCH_DISTANCE) or \
                (bottom - self._SEARCH_DISTANCE) <= obj.y1 <= (top + self._SEARCH_DISTANCE)
@@ -270,7 +271,7 @@ class Pile(object):
             if pattern == 'none':
                 continue
             elif pattern.startswith('heading'):
-                lead = '#' * int(pattern[-1])
+                lead = '\n\n' +  '#' * int(pattern[-1])
                 markdown += lead + ' ' + content
             elif pattern.startswith('plain-text'):
                 markdown += content
@@ -279,7 +280,7 @@ class Pile(object):
                 markdown += lead + ' ' + content
             else:
                 raise Exception('Unsupported syntax pattern')
-
+            
             if newline:
                 markdown += '\n\n'
 
@@ -350,8 +351,10 @@ class Pile(object):
 
 
     def _find_exist_coor(self, minimum, maximum, start_idx, line_coor, direction):
+        # span = -1
         span = 0
         line_exist = False
+        # while not line_exist and start_idx+span+1 < len(line_coor):
         while not line_exist:
             span += 1
             coor = line_coor[start_idx + span]
@@ -382,7 +385,8 @@ class Pile(object):
 
     def _fill_vertical_range(self, bottom, top, obj):
         assert top > bottom
-        return obj.y0 <= (bottom + self._SEARCH_DISTANCE) and (top - self._SEARCH_DISTANCE) <= obj.y1
+        # return obj.y0 <= (bottom + self._SEARCH_DISTANCE) and (top - self._SEARCH_DISTANCE) <= obj.y1
+        return obj.y0 <= (bottom + ((top - bottom)/2)) and (top - ((top - bottom)/2)) <= obj.y1
 
 
     def _fill_horizontal_range(self, left, right, obj):
@@ -391,6 +395,13 @@ class Pile(object):
 
     def _intermediate_to_markdown(self, intermediate):
         markdown = ''
+        if self._is_only_cell(intermediate):
+            for cell in intermediate[0]:
+                texts = [text.get_text().strip() for text in cell['texts']]
+                texts = ' '.join(texts)
+                markdown += texts
+            return '\n```\n' + markdown + '\n```\n\n'
+        
         markdown += self._create_tag('table', True, 0)
         for row in intermediate:
             markdown += self._create_tag('tr', True, 1)
@@ -402,6 +413,12 @@ class Pile(object):
         return markdown
 
 
+    def _is_only_cell(self, intermediate):
+        n = len(intermediate)  # 行数
+        m = len(intermediate[0]) if n > 0 else 0 # 列数，如果数组不为空
+        return n == 1 and m <= 1
+            
+
     def _create_tag(self, tag_name, start, level):
         indent = '\t' * level
         slash = '' if start else '/'
@@ -411,7 +428,7 @@ class Pile(object):
 
     def _create_td_tag(self, cell):
         indent = '\t' * 2
-        texts = [text.get_text().encode('utf8').strip() for text in cell['texts']]
+        texts = [text.get_text().strip() for text in cell['texts']]
         texts = ' '.join(texts)
         colspan = ' colspan={}'.format(cell['colspan']) if 'colspan' in cell else ''
         rowspan = ' rowspan={}'.format(cell['rowspan']) if 'rowspan' in cell else ''

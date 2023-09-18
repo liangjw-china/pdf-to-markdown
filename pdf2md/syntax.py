@@ -18,7 +18,7 @@ class BaseSyntax(object):
 
 
     def purify(self, text):
-        return text.get_text().encode('utf8').strip()
+        return text.get_text().strip()
 
 
 class UrbanSyntax(BaseSyntax):
@@ -27,50 +27,40 @@ class UrbanSyntax(BaseSyntax):
 
 
     def pattern(self, text):
-        content = text.get_text().encode('utf8').strip()
+        content = text.get_text().strip()
 
         if not content:
             return 'none'
 
         if content.isdigit(): # page number
             return 'none'
-
-        if 17.9 < text.height < 18.1:
-            return 'heading-3'
-
-        if 20.0 < text.height < 20.1:
+        
+        # Remove single lines with only numeric identifiers and no content
+        num_lines_pattern = r'^([1-9|0-9]+[、.])*(?![\u4e00-\u9fa5a-zA-Z])$'
+        if re.search(num_lines_pattern, content):
+            return 'none'
+        # '^([一二三四五六七八九1-9]+[、.]){3}(?![一二三四五六七八九1-9]).*([\u4e00-\u9fa5a-zA-Z]+)$'
+        h4_pattern = r'^([1-9|0-9]+[、.]){3}(?![1-9|0-9]).*([\u4e00-\u9fa5a-zA-Z]+)$'
+        if 24.0 < text.height < 26.0:
             return 'heading-1'
 
-        if 15.9 < text.height < 16.0:
+        if 22.0 < text.height < 24.0:
             return 'heading-2'
 
-        mo = re.search('^(一|二|三|四|五|六|七|八|九|十)、', content)
-        if mo:
+        if 16.0 < text.height < 18.0:
             return 'heading-3'
 
-        mo = re.search('^(（|\()(一|二|三|四|五|六|七|八|九|十)(）|\))', content)
-        if mo:
+        if (14.0 < text.height < 16.0) and (text.x0 < 90.1) and (re.search(h4_pattern, content)):
             return 'heading-4'
-
-        mo = re.search('^\d+、', content)
-        if mo:
+        
+        ol_pattern = r'^\d+、'
+        if re.search(ol_pattern, content):
             return 'ordered-list-item'
-
-        if text.x0 < 90.1: # special case for neihu page 2
-            return 'unordered-list-item'
 
         return 'plain-text'
 
+
     def newline(self, text):
-        content = text.get_text().encode('utf8').strip()
-
-        if text.x0 < 90.1: # special case for neihu page 2
-            return True
-
-        mo = re.search('。$', content)
-        if mo:
-            return True
-
         if text.x1 > 505.0: # reach the right margin
             return False
 
@@ -78,19 +68,11 @@ class UrbanSyntax(BaseSyntax):
 
 
     def purify(self, text):
-        content = text.get_text().encode('utf8').strip()
+        content = text.get_text().strip()
 
-        mo = re.match('(一|二|三|四|五|六|七|八|九|十)、(.*)', content)
-        if mo:
-            return mo.group(2)
-
-        mo = re.match('(（|\()(一|二|三|四|五|六|七|八|九|十)(）|\))(.*)', content)
-        if mo:
-            return mo.group(4)
-
-        mo = re.match('^\d+、(.*)', content)
-        if mo:
-            return mo.group(1)
-
+        h_pattern = re.search('^(# )(.*)$', content)
+        if h_pattern:
+            return h_pattern.group(2)
+        
         return content
 

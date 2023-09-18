@@ -6,7 +6,7 @@ from pdfminer.pdfinterp import PDFPageInterpreter
 from pdfminer.pdfdevice import PDFDevice
 from pdfminer.layout import LAParams
 from pdfminer.converter import PDFPageAggregator
-from pile import Pile
+from .pile import Pile
 
 
 class Parser(object):
@@ -14,7 +14,6 @@ class Parser(object):
         self._document = self._read_file(filename)
         self._device, self._interpreter = self._prepare_tools()
         self._pages = {}
-
         self._HTML_DEBUG = True
 
 
@@ -47,7 +46,7 @@ class Parser(object):
 
 
     def _prepare_tools(self):
-        laparams = LAParams()
+        laparams = LAParams(char_margin=1.0)
         rsrcmgr = PDFResourceManager()
         device = PDFPageAggregator(rsrcmgr, laparams=laparams)
         interpreter = PDFPageInterpreter(rsrcmgr, device)

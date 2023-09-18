@@ -45,8 +45,9 @@ class Writer(object):
         with open(filename, 'w') as fwrite:
             for pile in piles:
                 if pile.get_type() == 'image':
-                    image = pile.get_image()
-                    self._save_image(image, 'images')
+                    pass
+                    # image = pile.get_image()
+                    # self._save_image(image, 'images')
                 markdown = pile.gen_markdown(self._syntax)
                 fwrite.write(markdown)
 
@@ -58,8 +59,8 @@ class Writer(object):
 
     def _gen_gitbook_intermediate(self, piles):
         intermediate = {}
-
         content = None
+        
         for pile in piles:
             markdown = pile.gen_markdown(self._syntax)
             lines = markdown.split('\n')
